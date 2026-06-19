@@ -40,11 +40,19 @@ app.all('*', async (req, res) => {
     const response = await fetch(targetUrl, fetchOptions);
     const buffer = await response.buffer();
 
-    // Прокидываем статус и заголовки ответа как есть
+    // Прокидываем статус и заголовки ответа как есть.
+    // ВАЖНО: content-encoding и content-length НЕ переносим — node-fetch уже
+    // автоматически распаковывает gzip при получении ответа от Supabase, но
+    // заголовок content-encoding: gzip остаётся в response.headers. Если мы
+    // передадим этот заголовок дальше клиенту, а тело при этом уже не сжато —
+    // клиент попытается распаковать обычный JSON как gzip и упадёт с ошибкой
+    // "ID1ID2 magic bytes mismatch". Аналогично content-length должен быть
+    // пересчитан под реальный (несжатый) размер тела.
     res.status(response.status);
     response.headers.forEach((value, key) => {
-      // transfer-encoding и connection не должны переноситься между серверами
-      if (key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'connection') {
+      const lower = key.toLowerCase();
+      if (lower !== 'transfer-encoding' && lower !== 'connection' &&
+          lower !== 'content-encoding' && lower !== 'content-length') {
         res.setHeader(key, value);
       }
     });
