@@ -15,9 +15,35 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SUPABASE_URL = 'https://jznjjpilbhkyytmwvnnc.supabase.co';
+const IMGBB_API_KEY = '4f8dda29e32ee35dc93056f67ab70328';
 
 // Пропускаем тело запроса как есть, без парсинга — прокси должен быть прозрачным
 app.use(express.raw({ type: '*/*', limit: '20mb' }));
+
+// Отдельный route для imgbb: тело запроса — это base64 картинки как plain text.
+// Сервер Railway сам делает запрос к imgbb (со своей, доступной без VPN сети)
+// и возвращает результат клиенту. Так картинка обходит ту же сетевую проблему,
+// что и Supabase — клиент стучится только в Railway, а Railway уже достучится
+// до imgbb сам.
+app.post('/imgbb-upload', async (req, res) => {
+  try {
+    const base64Image = req.body.toString('utf-8');
+    const params = new URLSearchParams();
+    params.append('key', IMGBB_API_KEY);
+    params.append('image', base64Image);
+
+    const response = await fetch('https://api.imgbb.com/1/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params,
+    });
+    const json = await response.json();
+    res.status(response.status).json(json);
+  } catch (err) {
+    console.error('imgbb proxy error:', err.message);
+    res.status(502).json({ error: 'imgbb proxy error', message: err.message });
+  }
+});
 
 app.all('*', async (req, res) => {
   try {
