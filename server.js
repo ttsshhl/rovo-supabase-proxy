@@ -45,6 +45,27 @@ app.post('/imgbb-upload', async (req, res) => {
   }
 });
 
+// Route для отдачи картинок с imgbb через прокси — Coil (загрузчик картинок
+// в приложении) тоже не может достучаться до i.ibb.co напрямую без VPN.
+// Используется как: /image-proxy?url=https://i.ibb.co/xxx/image.jpg
+app.get('/image-proxy', async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl || !imageUrl.startsWith('https://i.ibb.co/')) {
+      return res.status(400).json({ error: 'invalid or missing url' });
+    }
+    const response = await fetch(imageUrl);
+    const buffer = await response.buffer();
+    res.status(response.status);
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.send(buffer);
+  } catch (err) {
+    console.error('image-proxy error:', err.message);
+    res.status(502).json({ error: 'image-proxy error', message: err.message });
+  }
+});
+
 app.all('*', async (req, res) => {
   try {
     const targetUrl = SUPABASE_URL + req.originalUrl;
